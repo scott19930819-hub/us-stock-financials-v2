@@ -41,35 +41,13 @@
 
     $(window).resize(function() {
         var THRESHOLD = 50;
-        _updateWindowInfo();
         var now = new Date().getTime();
         if(now - _lastFiredResize > THRESHOLD) {
             _fireResize();
         } else if(!_lastTimeout) {
             _lastTimeout = window.setTimeout(_fireResize, THRESHOLD);
         }
-   });
-
-    $(window).scroll(function () {
-        _updateWindowInfo();
     });
-
-    var _windowInfo;
-    var _updateWindowInfo = $axure.updateWindowInfo = function () {
-        var win = {};
-        var jWin = $(window);
-        var scrollWin = $('#ios-safari-html').length > 0 ? $('#ios-safari-html') : jWin;
-        win.width = jWin.width();
-        win.height = jWin.height();
-        win.scrollx = scrollWin.scrollLeft();
-        win.scrolly = scrollWin.scrollTop();
-        _windowInfo = win;
-    };
-    $ax.getWindowInfo = function () {
-        if(!_windowInfo) _updateWindowInfo();
-        return _windowInfo;
-    };
-
     
     window.$obj = function(id) {
         return $ax.getObjectFromElementId(id);
@@ -211,10 +189,13 @@
 
         var getParent = function(elementId) {
             var containerIndex = elementId.indexOf('_container');
-            if(containerIndex !== -1) elementId = elementId.substring(0, containerIndex);
-            if(elementId.indexOf('_text') !== -1) elementId = $ax.GetShapeIdFromText(elementId);
+            if(containerIndex != -1) elementId = elementId.substring(0, containerIndex);
 
-            // Check repeater item before layer, because repeater item detects it's parent layer, but wants to go directly to it's repeater first.
+            // Layer only references it if it is a direct layer to it
+            var parent = $ax.getLayerParentFromElementId(elementId);
+            // If layer is allowed we found parent, otherwise ignore and keep climbing
+            if (parent) return filter.indexOf('layer') != -1 ? parent : getParent(parent);
+
             // if repeater item, then just return repeater
             var scriptId = $ax.repeater.getScriptIdFromElementId(elementId);
             var itemNum = $ax.repeater.getItemIdFromElementId(elementId);
@@ -223,15 +204,10 @@
             // scriptId is item or repeater itself
             if (parentRepeater == scriptId) {
                 // If you are repeater item, return your repeater
-                if (itemNum) return filter.indexOf('repeater') != -1 ? scriptId : getParent(scriptId);
+                if(itemNum) return filter.indexOf('repeater') != -1 ? scriptId : getParent(scriptId);
                 // Otherwise you are actually at repeater, clean parentRepeater, or else you loop
                 parentRepeater = undefined;
             }
-
-            // Layer only references it if it is a direct layer to it
-            var parent = $ax.getLayerParentFromElementId(elementId);
-            // If layer is allowed we found parent, otherwise ignore and keep climbing
-            if (parent) return filter.indexOf('layer') != -1 ? parent : getParent(parent);
             
             // if state, then just return panel
             if(scriptId.indexOf('_state') != -1) {
@@ -249,7 +225,7 @@
             var masterPath = $ax.getPathFromScriptId($ax.repeater.getScriptIdFromElementId(elementId));
             masterPath.pop();
             if(masterPath.length > 0) {
-                var masterId = $ax.getElementIdFromPath(masterPath, { itemNum: itemNum }, true);
+                var masterId = $ax.getElementIdFromPath(masterPath, { itemNum: itemNum });
                 if(!masterId) return undefined;
                 var masterRepeater = $ax.getParentRepeaterFromElementId($ax.repeater.getScriptIdFromElementId(masterId));
                 if(!parentRepeater || masterRepeater) {
@@ -265,7 +241,7 @@
                 // If there is a parent master, the dynamic panel must be in it, otherwise parentDynamicPanel would be undefined.
                 var panelPath = masterPath;
                 panelPath[panelPath.length] = parentDynamicPanel;
-                panelId = $ax.getElementIdFromPath(panelPath, { itemNum: itemNum }, true);
+                panelId = $ax.getElementIdFromPath(panelPath, { itemNum: itemNum });
                 if(!panelId) return undefined;
                 var panelRepeater = $ax.getParentRepeaterFromElementId(panelId);
                 if(!parentRepeater || panelRepeater) {
@@ -278,53 +254,44 @@
             return !parent || filter.indexOf(parentType) != -1 ? parent : getParent(parent);
         };
 
-        for (var i = 0; i < elementIds.length; i++) {
-            var elementId = elementIds[i];
-            if ((elementId || elementId === 0) && elementId !== "undefined") {
-                var parent = getParent(elementId);
-                if (deep) {
-                    var parents = [];
-                    while (parent) {
-                        parents[parents.length] = parent;
-                        // If id is not a valid object, you are either repeater item or dynamic panel state
-                        //if(!$obj(parent)) parent = $ax.visibility.getWidgetFromContainer($jobj(parent).parent().attr('id'));
+        for(var i = 0; i < elementIds.length; i++) {
+            var parent = getParent(elementIds[i]);
+            if(deep) {
+                var parents = [];
+                while(parent) {
+                    parents[parents.length] = parent;
+                    // If id is not a valid object, you are either repeater item or dynamic panel state
+                    if(!$obj(parent)) parent = $ax.visibility.getWidgetFromContainer($jobj(parent).parent().attr('id'));
 
-                        parent = getParent(parent);
-                    }
-                    parent = parents;
+                    parent = getParent(parent);
                 }
-                parentIds[parentIds.length] = parent;
+                parent = parents;
             }
+            parentIds[parentIds.length] = parent;
         }
         return parentIds;
     };
 
     // Get the path to the child, where non leaf nodes can be masters, layers, dynamic panels, and repeaters.
-    $ax.public.fn.getChildren = function(deep, ignoreUnplaced) { // ignoreUnplaced should probably be the default, but when that is done a full audit of usages should be done
+    $ax.public.fn.getChildren = function(deep) {
         var elementIds = this.getElementIds();
         var children = [];
 
-        var getChildren = function (elementId) {
+        var getChildren = function(elementId) {
             var obj = $obj(elementId);
-            //if(!obj) return undefined;
+            if(!obj) return undefined;
 
-            var isRepeater = obj && obj.type == $ax.constants.REPEATER_TYPE;
-            if (isRepeater && $ax.repeater.getScriptIdFromElementId(elementId) != elementId) {
-                //prevent repeater items from being marked as isRepeater
-                //TODO: evaluate changing the naming convention to be more like panel states which don't seem to have this problem
-                obj = undefined;
-                isRepeater = false;
-            }
-            var isDynamicPanel = obj && obj.type == $ax.constants.DYNAMIC_PANEL_TYPE;
-            //var isLayer = obj.type == $ax.constants.LAYER_TYPE;
-            //var isMaster = obj.type == $ax.constants.MASTER_TYPE || obj.type == $ax.constants.REFERENCE_DIAGRAM_OBJECT_TYPE;
+            var isRepeater = obj.type == $ax.constants.REPEATER_TYPE;
+            var isDynamicPanel = obj.type == $ax.constants.DYNAMIC_PANEL_TYPE;
+            var isLayer = obj.type == $ax.constants.LAYER_TYPE;
+            var isMaster = obj.type == $ax.constants.MASTER_TYPE;
             
-            var isMenu = obj && obj.type == $ax.constants.MENU_OBJECT_TYPE;
-            var isTreeNode = obj && obj.type == $ax.constants.TREE_NODE_OBJECT_TYPE;
-            //var isTable = obj.type == $ax.constants.TABLE_TYPE;
+            var isMenu = obj.type == $ax.constants.MENU_OBJECT_TYPE;
+            var isTreeNode = obj.type == $ax.constants.TREE_NODE_OBJECT_TYPE;
+            var isTable = obj.type == $ax.constants.TABLE_TYPE;
             //var isCompoundVector = obj.type == $ax.constants.VECTOR_SHAPE_TYPE && obj.generateCompound;
 
-            //if (isRepeater || isDynamicPanel || isLayer || isMaster || isMenu || isTreeNode || isTable) {// || isCompoundVector) {
+            if (isRepeater || isDynamicPanel || isLayer || isMaster || isMenu || isTreeNode || isTable) {// || isCompoundVector) {
                 // Find parent that children should be pulled from. Default is just the elementId query (used by table and master)
                 var parent = $jobj(elementId);
                 if(isRepeater) {
@@ -342,7 +309,7 @@
 
                 // Menu doesn't want all children, only tables and menus, so it must be handled specially
                 var children = isMenu ? parent.children('.ax_table').add(parent.children('.ax_menu')) : parent.children();
-                children = $ax.visibility.getRealChildren(_fixForBasicLinks(children));
+                children = $ax.visibility.getRealChildren(children);
                 
                 // For tree nodes you want the the button shape contained by the elementQuery too
                 if(isTreeNode) {
@@ -362,8 +329,7 @@
                     if(typeof(id) == 'undefined' && childObj.is('a')) id = $(childObj.children()[0]).attr('id');
                     // Ignore annotations and any other children that are not elements
                     if (id.split('_').length > 1) continue;
-                    // Ignore Unplaced
-                    if(ignoreUnplaced && $ax.visibility.isScriptIdLimbo($ax.repeater.getScriptIdFromElementId(id))) continue;
+
                     childrenIds.push(id);
                 }
                 
@@ -377,31 +343,15 @@
                 }
                 
                 return childrenIds;
-            //}
+            }
 
-            //return undefined;
+            return undefined;
         };
 
         for(var i = 0; i < elementIds.length; i++) {
-            var elementId = elementIds[i];
-            //if the state is passed in, look for children in the content element
-            if (elementId.indexOf('_state') > -1 && elementId.indexOf('_content') < 0) elementId = elementId + '_content';
-            children[children.length] = { id: elementId, children: getChildren(elementId)};
+            children[children.length] = { id : elementIds[i], children : getChildren(elementIds[i])};
         }
         return children;
-    };
-
-    var _fixForBasicLinks = function(query) {
-        var hasBasicLinks = query.filter('.basiclink').length > 0;
-        if(!hasBasicLinks) return query;
-
-        var retval = $();
-        for(var i = 0; i < query.length; i++) {
-            var child = $(query[i]);
-            if(child.hasClass('basiclink')) retval = retval.add(child.children());
-            else retval = retval.add(child);
-        }
-        return retval;
     };
 
 })();

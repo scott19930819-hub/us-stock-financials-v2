@@ -13,9 +13,6 @@ $axure.internal(function($ax) {
 //            if($ax.visibility.IsVisible(submenuElement) && submenuElement.style.display !== 'none') return;
             $ax.visibility.SetIdVisible(subMenuId, true);
             $ax.legacy.BringToFront(subMenuId);
-            //$submenudiv.find('.menu_item').each(function() {
-            //    $ax.style.updateTextAlignmentForVisibility($ax.GetTextPanelId($(this).attr('id')));
-            //});
             _fireEventForSubmenu(subMenuId, "onShow");
 
         }).mouseleave(function (e) {
@@ -24,7 +21,7 @@ $axure.internal(function($ax) {
             var subcontheight = $submenudiv.height();
             //If mouse is not within the submenu (added 3 pixel margin to top and left calculations), then close the submenu...
             if(e.pageX + 3 < offset.left || e.pageX > offset.left + subcontwidth || e.pageY + 3 < offset.top || e.pageY > offset.top + subcontheight) {
-                $submenudiv.find('.sub_menu').addBack().each(function () {
+                $submenudiv.find('.sub_menu').andSelf().each(function () {
 //                    if(!$ax.visibility.IsVisible(this)) return;
                     $ax.visibility.SetVisible(this, false);
                     _fireEventForSubmenu(subMenuId, "onHide");
@@ -38,7 +35,7 @@ $axure.internal(function($ax) {
         //mouseleave for submenu
         $submenudiv.mouseleave(function(e) {
             //close this menu and all menus below it
-            $(this).find('.sub_menu').addBack().css({ 'visibility': 'hidden', 'display': 'none' }).each(function () {
+            $(this).find('.sub_menu').andSelf().css({ 'visibility': 'hidden', 'display': 'none' }).each(function () {
 //                if(!$ax.visibility.IsVisible(this)) return;
                 _fireEventForSubmenu(this.id, "onHide");
             });
@@ -89,9 +86,9 @@ $axure.internal(function($ax) {
                 var child = parent.childNodes[i];
                 if(after && child.id && $(child).hasClass("treenode")) {
                     var elementId = child.id;
-                    child.style.top = $ax.getNumFromPx($(child).css('top')) + delta + 'px';
+                    child.style.top = Number($(child).css('top').replace("px", "")) + delta + 'px';
                     var ann = window.document.getElementById(elementId + "_ann");
-                    if (ann) ann.style.top = $ax.getNumFromPx($(ann).css('top')) + delta + 'px';
+                    if(ann) ann.style.top = Number($(ann).css('top').replace("px", "")) + delta + 'px';
                 }
                 if(child == current) after = true;
             }
@@ -124,9 +121,9 @@ $axure.internal(function($ax) {
                 var child = parent.childNodes[i];
                 if(after && child.id && $(child).hasClass("treenode")) {
                     var elementId = child.id;
-                    child.style.top = $ax.getNumFromPx($(child).css('top')) - delta + 'px';
+                    child.style.top = Number($(child).css('top').replace("px", "")) - delta + 'px';
                     var ann = window.document.getElementById(elementId + "_ann");
-                    if (ann) ann.style.top = $ax.getNumFromPx($(ann).css('top')) - delta + 'px';
+                    if(ann) ann.style.top = Number($(ann).css('top').replace("px", "")) - delta + 'px';
                 }
                 if(child == current) after = true;
             }
