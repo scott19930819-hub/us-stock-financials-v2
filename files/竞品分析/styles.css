@@ -342,3 +342,25 @@
   visibility:hidden;
   word-wrap:break-word;
 }
+#u28_img {
+  position:absolute;
+  left:0px;
+  top:0px;
+  width:532px;
+  height:44px;
+}
+#u28 {
+  position:absolute;
+  left:863px;
+  top:1084px;
+  width:532px;
+  height:44px;
+  font-size:18px;
+}
+#u29 {
+  position:absolute;
+  left:0px;
+  top:0px;
+  width:532px;
+  word-wrap:break-word;
+}
